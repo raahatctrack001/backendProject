@@ -14,7 +14,8 @@ export const uploadOnCloudinary = async (localFilePath) => {
         const response = await cloudinary.uploader.upload(localFilePath, {
             resource_type: 'auto', // to detect any type img video of pdf
         });
-
+        
+        console.log(response.url)
         fs.unlinkSync(localFilePath);
         return response;
     }

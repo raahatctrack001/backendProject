@@ -12,11 +12,6 @@ connectDB()
     console.log("MONGO db connection failed !!! ", err);
 })
 
-app.get('/', (req, res)=>{
-    res.status(200).json({
-        message: 'api call from index.js of backend project'
-    })
-})
 /*
 import express from "express"
 const app = express()
