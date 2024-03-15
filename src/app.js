@@ -1,6 +1,7 @@
 import express from 'express';
 import cookieParser from 'cookie-parser';
-import cors from 'cors'
+import cors from 'cors';
+
 const app = express();
 
 /*
@@ -18,12 +19,12 @@ app.use(cors({
 }));
 
 //middleware to handle data coming in json format at limit if data is exceeding 16 kb
-app.use(express.json({limit: "16Kb"}));
+app.use(express.json({limit: "16kb"}));
 
 //to handle data coming from url like slug(+), slug(%) i.e. handles url encoding and limit to 16Kb only
 app.use(express.urlencoded({
     extended: true,
-    limit: "16Kb",
+    limit: "16kb",
 }));
 
 //all the static files like image pdf etc lies in folder named public
@@ -31,3 +32,16 @@ app.use(express.static("public"));
 
 //handles the cookie of server
 app.use(cookieParser);
+
+/* ###########################seggregation#################################*/
+//import router;
+import userRouter from './routes/user.routes.js';
+
+
+//router declaration
+app.use('/users', userRouter); //now control goes to userRouter in routes folder i.e. user.routes.js
+
+
+// http://localhost:8000/api/v1/users/register i.e. /api/v1/user is prefix
+
+export { app };
