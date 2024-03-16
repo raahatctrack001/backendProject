@@ -3,6 +3,13 @@ import cookieParser from 'cookie-parser';
 import cors from 'cors';
 
 const app = express();
+
+// apply them
+
+app.post('/', (req, res)=>{
+    console.log(req.body);
+})
+
 /*
 /*
 handle 5 middlewares first in app.js
@@ -28,10 +35,10 @@ app.use(express.urlencoded({
 }));
 
 //all the static files like image pdf etc lies in folder named public
-app.use(express.static("public"));
+app.use(express.static("public")); //multer destination and filename
 
-// //handles the cookie of server
-// app.use(cookieParser);
+// //handles the cookie of server: cookieParser() not cookieParser
+app.use(cookieParser());
 
 /* ###########################seggregation################################# */
 //import router;
