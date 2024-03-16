@@ -39,15 +39,17 @@ export const registerUser = asyncHandler(async (req, res, next)=>{
     let avatarLocalFilePath;
     let coverImageLocalFilePath;
     const files = req.files;
-    files.forEach(file => {
-        if(file.fieldname === 'avatar'){
-            avatarLocalFilePath = file.path;
-        }
-        if(file.fieldname === 'coverImage'){
-            coverImageLocalFilePath = file.path;
-        }
-        
-    });
+    if(files && Array.isArray(files) ){
+        files.forEach(file => {
+            if(file.fieldname === 'avatar'){
+                avatarLocalFilePath = file.path;
+            }
+            if(file.fieldname === 'coverImage'){
+                coverImageLocalFilePath = file.path;
+            }
+            
+        });
+    }
     
     if (!avatarLocalFilePath) {
         throw new apiError(400, "Avatar local file is required")
@@ -56,20 +58,21 @@ export const registerUser = asyncHandler(async (req, res, next)=>{
     if (!avatarCloudLink) {
         throw new apiError(400, "Avatar cloud link is required")
     }
+
     const coverImageCloudLink = await uploadOnCloudinary(coverImageLocalFilePath);
-    
 const newUser = await User.create({
     fullName,
     avatar: avatarCloudLink.url,
-    coverImage: coverImageCloudLink.url || '',
+    coverImage: coverImageCloudLink?.url || '',
     email,
     password,
     username: username.toLowerCase(), 
 });
+
 const createdUser = await User.findById(newUser._id).select(
     '-password -refreshToken' //things not to select
     )
-    
+console.log(createdUser);
     if(!createdUser){
         throw new apiError(500, 'something went wrong while registering user');
     }
@@ -78,3 +81,5 @@ const createdUser = await User.findById(newUser._id).select(
         new apiResponse(200, createdUser, "User registration SUCCESSFUL")
         )
     });
+
+    
