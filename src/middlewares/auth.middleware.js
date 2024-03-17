@@ -5,20 +5,35 @@ import { User } from "../models/user.model.js";
 
 export const verifyUser = asyncHandler(async (req, res, next)=>{
     try {
-        const token = req.cookie?.accessToken || req.header('Authorization')?.replace('Bearer ','');
-    
+        //cookies and not cookie also headers not header: it was a bug so keep in mind next time
+        const token = req.cookies?.accessToken || req.headers('Authorization')?.replace('Bearer ','');
+        
         if(!token){
             throw new apiError(401, 'Access denied: Unauthorized');
         }
-    
+
+        
         const decodedToken = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
-        const currentUser = User.findById(decodedToken?._id).select('-password', '-refreshToken');
-    
-        if(!currentUser){
-            throw new apiError(401, 'invalid token')
+        /* 
+        decodedToken { detail of user with reference to created tokens from user model
+            _id: '65f5de6715a01726f762a5fc',      
+            email: 'user3@gmaiil.com',
+            username: 'user3',
+            fullName: 'user1',
+            iat: 1710699590,
+            exp: 1710785990
+            }           
+        
+        */
+       //now we have _id from decoded Token
+       const currentUser = User.findById(decodedToken?._id).select('-password -refreshToken');
+       
+       if(!currentUser){
+           throw new apiError(401, 'invalid token')
         }
-    
-        req.user = user;
+        
+        req.user = currentUser;
+        // throw new apiError(500, 'intentionally terminated program!');
         next();
     } catch (error) {
         throw new apiError(401, error.message || 'invalid access token')

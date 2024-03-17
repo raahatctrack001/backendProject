@@ -6,9 +6,10 @@ import apiResponse from "../utils/apiResponse.js";
 
 const generateAccessAndRefreshToken = async(userId) => {
     try{
-        const currentUser = User.findById(userId);
+        const currentUser = await User.findById(userId); //whenever there's a communication between data base ASYNC AWAIT is mendatory otherwise you will end up your whole day finding bugs
         const accessToken = currentUser.generateAccessToken();
         const refreshToken = currentUser.generateRefreshToken();
+        currentUser.refreshToken = refreshToken;
 
         currentUser.refreshToken = refreshToken;
         currentUser.save();
@@ -89,7 +90,6 @@ export const registerUser = asyncHandler(async (req, res, _)=>{ //_ = next when 
         )
     });
 
-
 export const loginUser = asyncHandler(async (req, res) =>{
     /* To Do's
         1. take form data and validate it
@@ -105,14 +105,14 @@ export const loginUser = asyncHandler(async (req, res) =>{
         throw new apiError(400, 'username or email is required');
     }
 
-    const currentUser = User.findOne({
+    const currentUser = await User.findOne({ //await was missing and error was: current.isPasswordCorrect isn't a function
         $or: [{username}, {email}]
     });
 
     if(!currentUser){
         throw new apiError(404, 'User does not exist');
     }
-
+    
     const isPasswordValid = currentUser.isPasswordCorrect(password);
     if(!isPasswordValid){
         throw new apiError(401, 'wrong credentials')
@@ -141,5 +141,28 @@ export const loginUser = asyncHandler(async (req, res) =>{
 })
 
 export const logoutUser = asyncHandler(async(req, res, next)=>{
+        await User.findByIdAndUpdate(
+            req.user._id, //from custom middleware
+            {
+                $unset: {
+                    refreshToken: 1//unset it from database
+                }
+            },
+            {
+                new: true
+            }
+        );
 
+        const options = {
+            httpOnly: true,
+            secure: true
+        }
+
+        return res
+        .status(200)
+        .clearCookie('accessToken', options)
+        .clearCookie('refreshToken', options)
+        .json(
+            new apiResponse(200, {}, "User logout SUCCESSFUL")
+        )
 });
