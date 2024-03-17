@@ -4,12 +4,6 @@ import cors from 'cors';
 
 const app = express();
 
-// apply them
-
-app.post('/', (req, res)=>{
-    console.log(req.body);
-})
-
 /*
 /*
 handle 5 middlewares first in app.js

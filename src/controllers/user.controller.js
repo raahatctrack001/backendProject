@@ -18,7 +18,7 @@ const generateAccessAndRefreshToken = async(userId) => {
     }
 }
 
-export const registerUser = asyncHandler(async (req, res, next)=>{
+export const registerUser = asyncHandler(async (req, res, _)=>{ //_ = next when next isn't in use
     /* To Do's
     1. get data from frontend : check from user model and must include required fields
     2. handle edge cases
@@ -139,3 +139,7 @@ export const loginUser = asyncHandler(async (req, res) =>{
         )
     )
 })
+
+export const logoutUser = asyncHandler(async(req, res, next)=>{
+
+});

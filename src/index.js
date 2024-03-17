@@ -15,9 +15,7 @@ connectDB()
 .catch((err) => {
     console.log("MONGO db connection failed !!! ", err);
 })
-app.post('/', (req, res)=>{
-    console.log(req.body);
-})
+
 
 /*
 import express from "express"
