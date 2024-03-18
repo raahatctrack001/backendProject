@@ -3,13 +3,15 @@ import asyncHandler from "../utils/asyncHandler.js";
 import { User } from "../models/user.model.js";
 import { uploadOnCloudinary } from "../services/cloudinary.services.js";
 import apiResponse from "../utils/apiResponse.js";
+import jwt from 'jsonwebtoken';
+import { upload } from "../middlewares/multer.middleware.js";
 
 const generateAccessAndRefreshToken = async(userId) => {
     try{
         const currentUser = await User.findById(userId); //whenever there's a communication between data base ASYNC AWAIT is mendatory otherwise you will end up your whole day finding bugs
         const accessToken = currentUser.generateAccessToken();
         const refreshToken = currentUser.generateRefreshToken();
-        currentUser.refreshToken = refreshToken;
+        currentUser.refreshToken = refreshToken; //for refreshing the token once access token in expired
 
         currentUser.refreshToken = refreshToken;
         currentUser.save();
@@ -19,7 +21,8 @@ const generateAccessAndRefreshToken = async(userId) => {
     }
 }
 
-export const registerUser = asyncHandler(async (req, res, _)=>{ //_ = next when next isn't in use
+export const registerUser = asyncHandler(async (req, res, _)=>{ 
+    //_ = next when next isn't in use
     /* To Do's
     1. get data from frontend : check from user model and must include required fields
     2. handle edge cases
@@ -31,8 +34,8 @@ export const registerUser = asyncHandler(async (req, res, _)=>{ //_ = next when 
     8. check if successfully saved or not
     9. return res;
     */
-    // console.log(req.body);
-    const {fullName, username, email, password} = req.body;
+   const {fullName, username, email, password} = req.body;
+    
     if (
         [fullName, email, username, password].some((field) => field?.trim() === "")
     ) {
@@ -141,22 +144,25 @@ export const loginUser = asyncHandler(async (req, res) =>{
 })
 
 export const logoutUser = asyncHandler(async(req, res, next)=>{
-        await User.findByIdAndUpdate(
-            req.user._id, //from custom middleware
-            {
-                $unset: {
-                    refreshToken: 1//unset it from database
-                }
-            },
-            {
-                new: true
+    // console.log(req.user._id)
+    // throw new apiError(500, 'intentional termination of program');
+    await User.findByIdAndUpdate(
+        req.user._id, //from custom middleware
+        // console.log(req.user._id)
+        {
+            $unset: {
+                refreshToken: 1//unset it from database
             }
-        );
-
-        const options = {
-            httpOnly: true,
-            secure: true
+        },
+        {
+            new: true // return new updated data object
         }
+    );
+            
+            const options = {
+                httpOnly: true,
+                secure: true
+          }
 
         return res
         .status(200)
@@ -166,3 +172,166 @@ export const logoutUser = asyncHandler(async(req, res, next)=>{
             new apiResponse(200, {}, "User logout SUCCESSFUL")
         )
 });
+
+export const refreshAccessToken = asyncHandler(async (req, res)=>{
+    try {
+        const incomingToken = req.cookies.refreshToken || req.body.refreshToken;
+        if(!incomingToken){
+            throw new apiError(401, 'Unauthorised request')
+        }
+    
+        const decodedToken = jwt.verify(
+            incomingToken,
+            process.env.REFRESH_TOKEN_SECRET
+        )
+        const currentUser = await User.findById(decodedToken?._id)
+        if(!currentUser){
+            throw new apiError(401, 'invalid refresh token')
+        }
+    
+        if(incomingToken !== currentUser.refreshToken){
+            throw new apiError(401, 'refresh token is expired or used');
+        }
+    
+        const {accessToken, newRefreshToken} = generateAccessAndRefreshToken(currentUser._id);
+        const options = {
+            httpOnly: true,
+            secure: true
+        }
+        return res  
+        .status(200)
+        .cookie('accessToken', accessToken, options)
+        .cookie('refreshToken', newRefreshToken, options)
+        .json(
+            new apiResponse(
+                200, 
+                {
+                    accessToken, refreshToken: newRefreshToken
+                },
+                "access token refreshed"
+            )
+        )
+    } catch (error) {
+        throw new apiError(401, error.message || 'invalid refresh token')
+    }
+})
+
+export const changeCurrentPassword = asyncHandler(async (req, res) =>{
+    const {oldPassword, newPassword, confirmPassword} = req.body;
+
+    if(newPassword !== confirmPassword){
+        throw new apiError(401, 'Old password and Confirm password match FAILED');
+    }
+    const currentUser = await User.findById(req.user._id);
+    if(!currentUser){
+        throw new apiError(400, "User doesn't found");
+    }
+
+    const user = await User.findById(req.user?._id)
+    const isPasswordCorrect = await user.isPasswordCorrect(oldPassword)
+
+    if (!isPasswordCorrect) {
+        throw new apiError(400, "Invalid old password")
+    }
+
+    user.password = newPassword
+    await user.save({validateBeforeSave: false})
+
+    return res
+    .status(200)
+    .json(new apiResponse(200, {}, "Password changed successfully"))
+})
+
+export const getCurrentUser = asyncHandler(async(req, res)=>{
+    console.log('inside get user controller', req.user)
+    return res
+    .status(200)
+    .json(new apiResponse(
+        200,
+        req.user,
+        "User fetched successfully"
+    ))
+})
+
+export const updateAccountDetails = asyncHandler(async(req, res)=>{
+    const {fullName, email} = req.body;
+    if(!fullName || !email){
+        throw new apiError(400, 'All fields are required');
+    }
+
+    const currentUser = await User.findByIdAndUpdate(
+        req.user?._id,
+        {
+            $set: {
+                fullName,
+                email
+            }
+        },
+        {new: true}
+    ).select('-password')
+
+    return res
+    .status(200)
+    .json(
+        new apiResponse(200, currentUser, 'data update SUCCESS')
+    );
+})
+
+export const updateAvatar = asyncHandler(async(req, res)=>{
+    const avatarLocalFile = req.file;
+    console.log(avatarLocalFile)
+    if(!avatarLocalFile){
+        throw new apiError(404, 'Avatar local file NOT FOUND!')
+    }
+    const avatarCloudLink = await uploadOnCloudinary(avatarLocalFile.path);
+    if(!avatarCloudLink){
+        throw new apiError(500, 'FAILED to upload file');
+    }
+    // throw new apiError(500, 'intentional termination');
+    
+    const currentUser = await User.findByIdAndUpdate(
+        req.user._id,
+        {
+            avatar: avatarCloudLink.url,
+        }, 
+        {
+            new : true
+        }
+    ).select("-password");
+
+    return res
+    .status(200)
+    .json(
+        new apiResponse(200, currentUser, 'Avatar update SUCCESS')
+    )
+})
+
+export const updateCoverImage = asyncHandler(async (req, res)=>{
+    const coverImageLocalFilePath = req.file;
+    if(!coverImageLocalFilePath){
+        throw new apiError(404, 'cover image local file NOT FOUND');
+    }
+
+    const coverImageCloudLink = await uploadOnCloudinary(coverImageLocalFilePath.path);
+    if(!coverImageCloudLink){
+        throw new apiError(404, 'FAILED to upload cover image on cloudinary!')
+    }
+    console.log('coverImageUploadResponse', coverImageCloudLink)
+
+    const currentUser = await User.findByIdAndUpdate(
+        req.user._id,
+        {
+            $set: {
+                coverImage: coverImageCloudLink.url
+            }            
+        }
+        ,
+        {new : true}
+    ).select('-password');
+
+    return res
+    .status(200)
+    .json(
+        new apiResponse(200, currentUser, 'Cover image upadate SUCCESS')
+    )
+})

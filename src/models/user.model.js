@@ -1,4 +1,4 @@
-import mongoose, {Schema, Model} from 'mongoose';
+import mongoose, {Schema} from 'mongoose';
 import bcrypt from 'bcrypt'
 import jwt from 'jsonwebtoken'
 
@@ -56,6 +56,7 @@ userSchema.pre('save', async function (next){
 
 //inject a method to check if password is correct
 userSchema.methods.isPasswordCorrect = async function (password) {
+    console.log('inside userSchema', password)
     return await bcrypt.compare(password, this.password);
 }
 
