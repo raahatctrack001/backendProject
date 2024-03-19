@@ -5,6 +5,7 @@ import { uploadOnCloudinary } from "../services/cloudinary.services.js";
 import apiResponse from "../utils/apiResponse.js";
 import jwt from 'jsonwebtoken';
 import { upload } from "../middlewares/multer.middleware.js";
+import { error } from "console";
 
 const generateAccessAndRefreshToken = async(userId) => {
     try{
@@ -35,9 +36,9 @@ export const registerUser = asyncHandler(async (req, res, _)=>{
     9. return res;
     */
    const {fullName, username, email, password} = req.body;
-    
+   
     if (
-        [fullName, email, username, password].some((field) => field?.trim() === "")
+        [fullName, email, username, password].some(field => field?.trim() === "")
     ) {
         throw new apiError(400, "All fields are required")
     }
@@ -51,7 +52,8 @@ export const registerUser = asyncHandler(async (req, res, _)=>{
         throw new apiError(409, 'user with this credentials already exist');
     }
     //console.log(req.files);
-
+    
+    console.log(req.files)
     const avatarLocalFilePath = req.files?.avatar[0]?.path;
     //const coverImageLocalPath = req.files?.coverImage[0]?.path;
 
@@ -61,7 +63,6 @@ export const registerUser = asyncHandler(async (req, res, _)=>{
     }
     
     
-    
     if (!avatarLocalFilePath) {
         throw new apiError(400, "Avatar local file is required")
     }    
@@ -69,7 +70,7 @@ export const registerUser = asyncHandler(async (req, res, _)=>{
     if (!avatarCloudLink) {
         throw new apiError(400, "Avatar cloud link is required")
     }
-
+    
     const coverImageCloudLink = await uploadOnCloudinary(coverImageLocalFilePath);
     const newUser = await User.create({
         fullName,
@@ -144,10 +145,11 @@ export const loginUser = asyncHandler(async (req, res) =>{
 })
 
 export const logoutUser = asyncHandler(async(req, res, next)=>{
-    // console.log(req.user._id)
-    // throw new apiError(500, 'intentional termination of program');
+    console.log('rq.user from logout controller', req.user)
+    if(!req.user)
+        // throw new apiError(500, 'no user found');
     await User.findByIdAndUpdate(
-        req.user._id, //from custom middleware
+        req.user?._id, //from custom middleware
         // console.log(req.user._id)
         {
             $unset: {
@@ -157,54 +159,56 @@ export const logoutUser = asyncHandler(async(req, res, next)=>{
         {
             new: true // return new updated data object
         }
-    );
-            
-            const options = {
-                httpOnly: true,
-                secure: true
-          }
-
-        return res
+        );
+        
+    const options = {
+        httpOnly: true,
+            secure: true
+        }
+        
+    console.log('logout success');
+    return res
         .status(200)
         .clearCookie('accessToken', options)
         .clearCookie('refreshToken', options)
         .json(
             new apiResponse(200, {}, "User logout SUCCESSFUL")
         )
-});
 
+});
+        
 export const refreshAccessToken = asyncHandler(async (req, res)=>{
     try {
         const incomingToken = req.cookies.refreshToken || req.body.refreshToken;
         if(!incomingToken){
             throw new apiError(401, 'Unauthorised request')
         }
-    
-        const decodedToken = jwt.verify(
-            incomingToken,
-            process.env.REFRESH_TOKEN_SECRET
-        )
-        const currentUser = await User.findById(decodedToken?._id)
-        if(!currentUser){
-            throw new apiError(401, 'invalid refresh token')
-        }
-    
-        if(incomingToken !== currentUser.refreshToken){
-            throw new apiError(401, 'refresh token is expired or used');
-        }
-    
-        const {accessToken, newRefreshToken} = generateAccessAndRefreshToken(currentUser._id);
-        const options = {
-            httpOnly: true,
-            secure: true
-        }
-        return res  
-        .status(200)
-        .cookie('accessToken', accessToken, options)
-        .cookie('refreshToken', newRefreshToken, options)
-        .json(
-            new apiResponse(
-                200, 
+            
+    const decodedToken = jwt.verify(
+        incomingToken,
+        process.env.REFRESH_TOKEN_SECRET
+    )
+    const currentUser = await User.findById(decodedToken?._id)
+    if(!currentUser){
+        throw new apiError(401, 'invalid refresh token')
+    }
+
+    if(incomingToken !== currentUser.refreshToken){
+        throw new apiError(401, 'refresh token is expired or used');
+    }
+
+    const {accessToken, newRefreshToken} = await generateAccessAndRefreshToken(currentUser._id);
+    const options = {
+        httpOnly: true,
+        secure: true
+    }
+    return res  
+    .status(200)
+    .cookie('accessToken', accessToken, options)
+    .cookie('refreshToken', newRefreshToken, options)
+    .json(
+        new apiResponse(
+            200, 
                 {
                     accessToken, refreshToken: newRefreshToken
                 },
@@ -212,34 +216,40 @@ export const refreshAccessToken = asyncHandler(async (req, res)=>{
             )
         )
     } catch (error) {
+        console.log(error)
         throw new apiError(401, error.message || 'invalid refresh token')
     }
 })
 
 export const changeCurrentPassword = asyncHandler(async (req, res) =>{
-    const {oldPassword, newPassword, confirmPassword} = req.body;
-
-    if(newPassword !== confirmPassword){
-        throw new apiError(401, 'Old password and Confirm password match FAILED');
+    try {
+        const {oldPassword, newPassword, confirmPassword} = req.body;
+    
+        if(newPassword !== confirmPassword){
+            throw new apiError(401, 'Old password and Confirm password match FAILED');
+        }
+    
+        const currentUser = await User.findById(req.user?._id);
+        if(!currentUser){
+            throw new apiError(400, "User doesn't found");
+        }
+    
+        const user = await User.findById(req.user?._id)
+        const isPasswordCorrect = await user.isPasswordCorrect(oldPassword)
+    
+        if (!isPasswordCorrect) {
+            throw new apiError(400, "Invalid old password")
+        }
+    
+        user.password = newPassword
+        await user.save({validateBeforeSave: false}) //validate password field only before running pre save hooks
+        console.log('pasword changd succesfully!')
+        return res
+        .status(200)
+        .json(new apiResponse(200, {}, "Password changed successfully"))
+    } catch (error) {
+        console.log(error);
     }
-    const currentUser = await User.findById(req.user._id);
-    if(!currentUser){
-        throw new apiError(400, "User doesn't found");
-    }
-
-    const user = await User.findById(req.user?._id)
-    const isPasswordCorrect = await user.isPasswordCorrect(oldPassword)
-
-    if (!isPasswordCorrect) {
-        throw new apiError(400, "Invalid old password")
-    }
-
-    user.password = newPassword
-    await user.save({validateBeforeSave: false})
-
-    return res
-    .status(200)
-    .json(new apiResponse(200, {}, "Password changed successfully"))
 })
 
 export const getCurrentUser = asyncHandler(async(req, res)=>{
@@ -292,7 +302,9 @@ export const updateAvatar = asyncHandler(async(req, res)=>{
     const currentUser = await User.findByIdAndUpdate(
         req.user._id,
         {
-            avatar: avatarCloudLink.url,
+            $set: {
+                avatar: avatarCloudLink.url
+            }
         }, 
         {
             new : true

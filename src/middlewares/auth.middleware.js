@@ -4,18 +4,22 @@ import jwt from 'jsonwebtoken';
 import { User } from "../models/user.model.js"; 
 
 export const verifyUser = asyncHandler(async (req, _, next)=>{
+    // console.log(req.cookies)
+    // throw new apiError(401, 'Access denied: Unauthorized action');
+    
     try {
         //cookies and not cookie also headers not header: it was a bug so keep in mind next time
         const token = req.cookies?.accessToken;
+        // || req.headers('Authorization')?.replace('Bearer ', '');
         
         /*
-         const token = req.cookies?.accessToken || req.headers('Authorization')?.replace('Bearer ','');
-           task:  search for 2nd condition
-         */
-        if(!token){
-            throw new apiError(401, 'Access denied: Unauthorized action');
+        const token = req.cookies?.accessToken || req.headers('Authorization')?.replace('Bearer ','');
+        task:  search for 2nd condition
+        */
+       if(!token){
+           throw new apiError(401, 'Access denied: Unauthorized action');
         }
-
+        
         
         const decodedToken = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
         // console.log('inside jwt verification', decodedToken);
@@ -27,20 +31,26 @@ export const verifyUser = asyncHandler(async (req, _, next)=>{
             fullName: 'user1',
             iat: 1710699590,
             exp: 1710785990
-            }           
+        }           
         
         */
        //now we have _id from decoded Token
-       const currentUser = User.findById(decodedToken?._id).select('-password -refreshToken');
+       //bhai please please please await laga diya kar!!! 1 din poora chala gya tere chakkar me kutte!
+       const currentUser =await User.findById(decodedToken?._id).select('-password -refreshToken');
        
+       //if whole usermodel is coming as response of currentUser make sure to call function with await!
+       
+    //    console.log('decodedToken', currentUser);
        if(!currentUser){
            throw new apiError(401, 'invalid token')
         }
         req.user = currentUser;
-        // console.log('user_id', currentUser._id);
+        
         // throw new apiError(500, 'intentionally terminated program!');
-        next();
+        next(); 
     } catch (error) {
-        throw new apiError(401, 'invalid access token')
+        //never assume the error just console.log it
+        console.log(error)
+        throw new apiError(401, 'Invalid token or No cookies received from the server')
     }
 });

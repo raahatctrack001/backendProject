@@ -1,6 +1,8 @@
 import dotenv from 'dotenv';
 import connectDB from './db/index.js';
 import app from './app.js';
+import { verify } from 'crypto';
+import { verifyUser } from './middlewares/auth.middleware.js';
 dotenv.config({
     path: './.env'
 });
@@ -15,7 +17,6 @@ connectDB()
 .catch((err) => {
     console.log("MONGO db connection failed !!! ", err);
 })
-
 
 /*
 import express from "express"
